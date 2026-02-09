@@ -3,9 +3,13 @@ FROM node:20-slim
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+RUN npm ci
 
-COPY dist/ ./dist/
+COPY tsconfig.json ./
+COPY src/ ./src/
+
+RUN npm run build
+RUN npm prune --omit=dev
 
 EXPOSE 3000
 
