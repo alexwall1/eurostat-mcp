@@ -1,0 +1,36 @@
+{
+  "name": "eurostat-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for Eurostat — access European statistics on economy, population, environment, trade, and more",
+  "homepage": "https://github.com/your-username/eurostat-mcp",
+  "license": "MIT",
+  "mcpVersion": "2025-03-26",
+  "capabilities": {
+    "tools": true,
+    "resources": false,
+    "prompts": false
+  },
+  "transports": ["stdio", "sse"],
+  "tools": [
+    {
+      "name": "search_datasets",
+      "description": "Search the Eurostat database for datasets matching a keyword or topic"
+    },
+    {
+      "name": "get_dataset_structure",
+      "description": "Get the structure (dimensions, codes, labels) of a specific Eurostat dataset"
+    },
+    {
+      "name": "get_dataset_data",
+      "description": "Fetch statistical data with dimension filters"
+    },
+    {
+      "name": "preview_data",
+      "description": "Quick preview of a dataset's latest data"
+    },
+    {
+      "name": "find_geo_code",
+      "description": "Resolve country/region names to Eurostat GEO codes"
+    }
+  ]
+}
