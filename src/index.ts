@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
-import express from "express";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import express, { Request, Response } from "express";
 import { z } from "zod";
 import {
   searchDatasets,
@@ -239,7 +239,7 @@ function createServer(): McpServer {
   // ── Tool: find_geo_code ──────────────────────────────────────────────────
   server.tool(
     "find_geo_code",
-    "Resolve a country or region name to its Eurostat GEO code. Supports fuzzy matching (e.g., 'Osterreich' → 'AT', 'Osterreich'). Returns code, name, and NUTS level. Useful when you know a place name but need the code for data queries.",
+    "Resolve a country or region name to its Eurostat GEO code. Supports fuzzy matching (e.g., 'Osterreich' → 'AT'). Returns code, name, and NUTS level. Useful when you know a place name but need the code for data queries.",
     {
       query: z
         .string()
@@ -295,7 +295,7 @@ function createServer(): McpServer {
 }
 
 // ---------------------------------------------------------------------------
-// Transport: HTTP/SSE (for remote hosting) or stdio (for local use)
+// Transport: Streamable HTTP (for remote hosting) or stdio (for local use)
 // ---------------------------------------------------------------------------
 
 async function main() {
@@ -309,31 +309,12 @@ async function main() {
     await server.connect(transport);
     console.error("Eurostat MCP server running on stdio");
   } else {
-    // HTTP/SSE mode for remote hosting (Render, etc.)
+    // Streamable HTTP mode for remote hosting (Render, etc.)
     const app = express();
-
-    // CORS middleware
-    app.use((req, res, next) => {
-      res.header("Access-Control-Allow-Origin", "*");
-      res.header(
-        "Access-Control-Allow-Methods",
-        "GET, POST, OPTIONS, DELETE"
-      );
-      res.header(
-        "Access-Control-Allow-Headers",
-        "Content-Type, Authorization, Accept"
-      );
-      if (req.method === "OPTIONS") {
-        res.status(204).end();
-        return;
-      }
-      next();
-    });
-
     app.use(express.json());
 
     // Health check
-    app.get("/health", (_req, res) => {
+    app.get("/health", (_req: Request, res: Response) => {
       res.json({
         status: "ok",
         server: "eurostat-mcp",
@@ -342,45 +323,72 @@ async function main() {
       });
     });
 
-    // Track active SSE transports
-    const transports = new Map<string, SSEServerTransport>();
-
-    // SSE endpoint for MCP connection
-    app.get("/sse", async (req, res) => {
-      const server = createServer();
-      const transport = new SSEServerTransport("/messages", res);
-      const sessionId = transport.sessionId;
-      transports.set(sessionId, transport);
-
-      res.on("close", () => {
-        transports.delete(sessionId);
-      });
-
-      await server.connect(transport);
+    // Create MCP server and stateless Streamable HTTP transport
+    const server = createServer();
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined, // stateless — no session tracking
     });
 
-    // Messages endpoint for MCP JSON-RPC
-    app.post("/messages", async (req, res) => {
-      const sessionId = req.query.sessionId as string;
-      const transport = transports.get(sessionId);
-      if (!transport) {
-        res.status(400).json({ error: "Invalid or expired session" });
-        return;
+    await server.connect(transport);
+
+    // MCP endpoint — POST handles JSON-RPC requests
+    app.post("/mcp", async (req: Request, res: Response) => {
+      try {
+        await transport.handleRequest(req, res, req.body);
+      } catch (error) {
+        console.error("Error handling MCP request:", error);
+        if (!res.headersSent) {
+          res.status(500).json({
+            jsonrpc: "2.0",
+            error: {
+              code: -32603,
+              message: "Internal server error",
+            },
+            id: null,
+          });
+        }
       }
-      await transport.handlePostMessage(req, res);
+    });
+
+    // MCP endpoint — GET returns 405 (no SSE streaming in stateless mode)
+    app.get("/mcp", async (_req: Request, res: Response) => {
+      res.writeHead(405).end(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          error: {
+            code: -32000,
+            message: "Method not allowed.",
+          },
+          id: null,
+        })
+      );
+    });
+
+    // MCP endpoint — DELETE returns 405 (no sessions in stateless mode)
+    app.delete("/mcp", async (_req: Request, res: Response) => {
+      res.writeHead(405).end(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          error: {
+            code: -32000,
+            message: "Method not allowed.",
+          },
+          id: null,
+        })
+      );
     });
 
     // Root page
-    app.get("/", (_req, res) => {
+    app.get("/", (_req: Request, res: Response) => {
       res.json({
         name: "Eurostat MCP Server",
         version: "1.0.0",
         description:
-          "MCP server providing access to Eurostat's European statistical database. Covers economy, population, environment, trade, and more.",
-        mcp_endpoint: "/sse",
-        messages_endpoint: "/messages",
+          "MCP server providing access to Eurostat's European statistical database.",
+        mcp_endpoint: "/mcp",
         health: "/health",
-        documentation: "https://ec.europa.eu/eurostat/web/user-guides/data-browser/api-data-access",
+        documentation:
+          "https://ec.europa.eu/eurostat/web/user-guides/data-browser/api-data-access",
         tools: [
           "search_datasets — Search for Eurostat datasets by keyword",
           "get_dataset_structure — Get dimensions and codes for a dataset",
@@ -393,8 +401,8 @@ async function main() {
 
     app.listen(port, () => {
       console.log(`Eurostat MCP server listening on port ${port}`);
-      console.log(`  Health: http://localhost:${port}/health`);
-      console.log(`  SSE:    http://localhost:${port}/sse`);
+      console.log(`  Health:   http://localhost:${port}/health`);
+      console.log(`  MCP:      http://localhost:${port}/mcp`);
     });
   }
 }
