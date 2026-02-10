@@ -370,14 +370,6 @@ async function main() {
       await transport.handlePostMessage(req, res);
     });
 
-    // Streamable HTTP endpoint (newer MCP protocol)
-    app.post("/mcp", async (req, res) => {
-      const server = createServer();
-      const transport = new SSEServerTransport("/mcp", res);
-      await server.connect(transport);
-      await transport.handlePostMessage(req, res);
-    });
-
     // Root page
     app.get("/", (_req, res) => {
       res.json({
@@ -386,6 +378,7 @@ async function main() {
         description:
           "MCP server providing access to Eurostat's European statistical database. Covers economy, population, environment, trade, and more.",
         mcp_endpoint: "/sse",
+        messages_endpoint: "/messages",
         health: "/health",
         documentation: "https://ec.europa.eu/eurostat/web/user-guides/data-browser/api-data-access",
         tools: [
@@ -402,7 +395,6 @@ async function main() {
       console.log(`Eurostat MCP server listening on port ${port}`);
       console.log(`  Health: http://localhost:${port}/health`);
       console.log(`  SSE:    http://localhost:${port}/sse`);
-      console.log(`  MCP:    http://localhost:${port}/mcp`);
     });
   }
 }
