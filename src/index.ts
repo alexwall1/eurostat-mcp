@@ -350,18 +350,41 @@ async function main() {
       }
     });
 
-    // MCP endpoint — GET returns 405 (no SSE streaming in stateless mode)
+    // MCP endpoint — GET returns server metadata for discovery
     app.get("/mcp", async (_req: Request, res: Response) => {
-      res.writeHead(405).end(
-        JSON.stringify({
-          jsonrpc: "2.0",
-          error: {
-            code: -32000,
-            message: "Method not allowed.",
-          },
-          id: null,
-        })
-      );
+      res.json({
+        protocol: "mcp",
+        version: "1.0.0",
+        name: "Eurostat Statistics Server",
+        description:
+          "European statistics data via MCP protocol — economy, population, environment, trade, and more across all EU member states.",
+        authentication: "none",
+        transport: "http",
+        capabilities: {
+          tools: true,
+          resources: false,
+          prompts: false,
+        },
+        tools: 5,
+        resources: 0,
+        prompts: 0,
+        connection: {
+          method: "POST",
+          endpoint: "/mcp",
+          content_type: "application/json",
+          format: "MCP JSON-RPC 2.0",
+        },
+        compatibility: {
+          platforms: ["web", "desktop", "cli"],
+          clients: [
+            "Claude Code",
+            "Claude Desktop",
+            "ChatGPT",
+            "Gemini",
+            "Custom MCP clients",
+          ],
+        },
+      });
     });
 
     // MCP endpoint — DELETE returns 405 (no sessions in stateless mode)
