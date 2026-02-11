@@ -307,9 +307,9 @@ For more information: [Eurostat API Documentation](https://ec.europa.eu/eurostat
 ---
 ## Acknowledgement
 
-Vibe coded by Alexander Wall wall.alexander@gmail.com
+Author Alexander Wall wall.alexander@gmail.com
 
 
 ## License
 
-MIT
+GNU General Public License v3.0
