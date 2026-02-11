@@ -305,6 +305,10 @@ For more information: [Eurostat API Documentation](https://ec.europa.eu/eurostat
 - **MCP Protocol**: https://modelcontextprotocol.io/
 
 ---
+## Acknowledgement
+
+Vibe coded by Alexander Wall wall.alexander@gmail.com
+
 
 ## License
 
