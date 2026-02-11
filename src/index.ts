@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
 import express, { Request, Response } from "express";
 import { z } from "zod";
 import {
@@ -309,9 +310,8 @@ async function main() {
     await server.connect(transport);
     console.error("Eurostat MCP server running on stdio");
   } else {
-    // HTTP + SSE mode for remote hosting (Render, etc.)
-    // This uses the legacy SSE transport (GET /sse + POST /messages)
-    // which is what Claude.ai connectors currently support.
+    // HTTP mode for remote hosting (Render, etc.)
+    // Supports both direct HTTP JSON-RPC (POST /mcp) and SSE (GET /sse) transports
     const app = express();
 
     // CORS — allow all origins
@@ -338,7 +338,74 @@ async function main() {
       });
     });
 
-    // Per-session SSE transports
+    // ────────────────────────────────────────────────────────────────────────
+    // PRIMARY TRANSPORT: Direct HTTP JSON-RPC (POST /mcp)
+    // ────────────────────────────────────────────────────────────────────────
+    // This is the recommended transport for ChatGPT, Claude.ai, and most MCP clients
+    // It handles standard HTTP requests/responses with JSON-RPC 2.0
+    
+    app.post("/mcp", async (req: Request, res: Response) => {
+      try {
+        console.log("HTTP JSON-RPC request received");
+        const server = createServer();
+        
+        // Create a simple transport that captures responses
+        let responseData: JSONRPCMessage | null = null;
+        
+        const simpleTransport = {
+          start: async () => {},
+          close: async () => {},
+          send: async (message: JSONRPCMessage) => {
+            responseData = message;
+          },
+        };
+        
+        // Connect the server with our simple transport
+        await server.connect(simpleTransport as any);
+        
+        // Handle the incoming JSON-RPC message
+        const message = req.body as JSONRPCMessage;
+        
+        // Process the message through the server
+        await (server as any).handleMessage(message);
+        
+        // Wait a bit for async processing
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Send the response
+        if (responseData) {
+          res.json(responseData);
+        } else {
+          const messageId = "id" in message ? message.id : null;
+          res.status(500).json({
+            jsonrpc: "2.0",
+            error: {
+              code: -32603,
+              message: "No response generated",
+            },
+            id: messageId,
+          });
+        }
+      } catch (error) {
+        console.error("Error handling HTTP JSON-RPC request:", error);
+        const messageId = req.body && "id" in req.body ? req.body.id : null;
+        res.status(500).json({
+          jsonrpc: "2.0",
+          error: {
+            code: -32603,
+            message: "Internal error",
+            data: error instanceof Error ? error.message : String(error),
+          },
+          id: messageId,
+        });
+      }
+    });
+
+    // ────────────────────────────────────────────────────────────────────────
+    // LEGACY TRANSPORT: SSE (GET /sse + POST /messages)
+    // ────────────────────────────────────────────────────────────────────────
+    // Kept for backward compatibility with older MCP clients
+    
     const transports: { [sessionId: string]: SSEServerTransport } = {};
 
     // SSE endpoint — client connects here to open the event stream
@@ -367,7 +434,11 @@ async function main() {
       await transport.handlePostMessage(req, res, req.body);
     });
 
-    // MCP metadata endpoint — matches the SCB-MCP pattern for discovery
+    // ────────────────────────────────────────────────────────────────────────
+    // METADATA & DISCOVERY ENDPOINTS
+    // ────────────────────────────────────────────────────────────────────────
+
+    // MCP metadata endpoint — provides server info for discovery
     app.get("/mcp", (_req: Request, res: Response) => {
       res.json({
         protocol: "mcp",
@@ -376,7 +447,20 @@ async function main() {
         description:
           "European statistics data via MCP protocol — economy, population, environment, trade, and more across all EU member states.",
         authentication: "none",
-        transport: "http",
+        transports: {
+          http: {
+            method: "POST",
+            endpoint: "/mcp",
+            contentType: "application/json",
+            format: "MCP JSON-RPC 2.0",
+          },
+          sse: {
+            method: "GET",
+            endpoint: "/sse",
+            messagesEndpoint: "/messages",
+            format: "Server-Sent Events",
+          },
+        },
         capabilities: {
           tools: true,
           resources: false,
@@ -385,12 +469,6 @@ async function main() {
         tools: 5,
         resources: 0,
         prompts: 0,
-        connection: {
-          method: "POST",
-          endpoint: "/mcp",
-          content_type: "application/json",
-          format: "MCP JSON-RPC 2.0",
-        },
         compatibility: {
           platforms: ["web", "desktop", "cli"],
           clients: [
@@ -412,10 +490,14 @@ async function main() {
         description:
           "MCP server providing access to Eurostat's European statistical database.",
         endpoints: {
+          mcp: "/mcp (POST for JSON-RPC, GET for metadata)",
           sse: "/sse",
           messages: "/messages",
-          mcp: "/mcp",
           health: "/health",
+        },
+        usage: {
+          recommended: "POST to /mcp with JSON-RPC 2.0 requests",
+          legacy: "GET /sse for Server-Sent Events transport",
         },
         documentation:
           "https://ec.europa.eu/eurostat/web/user-guides/data-browser/api-data-access",
@@ -425,9 +507,10 @@ async function main() {
     app.listen(port, () => {
       console.log(`Eurostat MCP server listening on port ${port}`);
       console.log(`  Health:     http://localhost:${port}/health`);
+      console.log(`  MCP (HTTP): POST http://localhost:${port}/mcp`);
+      console.log(`  MCP (info): GET  http://localhost:${port}/mcp`);
       console.log(`  SSE:        http://localhost:${port}/sse`);
       console.log(`  Messages:   http://localhost:${port}/messages`);
-      console.log(`  MCP info:   http://localhost:${port}/mcp`);
     });
   }
 }

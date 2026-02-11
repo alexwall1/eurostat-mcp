@@ -44,30 +44,47 @@ Data ranges from the 1950s to the present, with regular monthly, quarterly, and 
 
 ### Option 1: Remote URL (no installation)
 
-Use the hosted server directly — works with all MCP-compatible clients:
+Use the hosted server directly — works with all MCP-compatible clients.
 
-Add this configuration to your MCP host:
+The server now supports **two transport modes**:
+
+#### **Recommended: Streamable HTTP (POST /mcp)**
+Best compatibility with ChatGPT, Claude.ai, and most MCP clients:
 
 ```json
 {
   "mcpServers": {
     "eurostat": {
       "type": "http",
-      "url": "https://your-deployment.onrender.com/sse"
+      "url": "https://eurostat-mcp.onrender.com/mcp"
     }
   }
 }
 ```
 
-| Client | How to connect |
-|---|---|
-| **Claude Web** | Add MCP server URL |
-| **ChatGPT** (Dev Mode) | Add MCP server URL |
-| **GitHub Copilot** (VS Code) | Add to `.vscode/mcp.json` |
-| **Gemini** | Configure HTTP MCP endpoint |
-| **Custom** | Connect via SSE at `/sse` |
+#### **Legacy: Server-Sent Events (GET /sse)**
+For older MCP clients that require SSE:
 
-No authentication required. CORS is enabled for all origins.
+```json
+{
+  "mcpServers": {
+    "eurostat": {
+      "type": "sse",
+      "url": "https://eurostat-mcp.onrender.com/sse"
+    }
+  }
+}
+```
+
+| Client | Recommended URL | Transport |
+|---|---|---|
+| **ChatGPT** | `https://eurostat-mcp.onrender.com/mcp` | HTTP (POST) |
+| **Claude.ai** | `https://eurostat-mcp.onrender.com/mcp` | HTTP (POST) |
+| **Claude Desktop** | Use stdio (see Option 2) | stdio |
+| **Claude Code** | Use stdio (see Option 2) | stdio |
+| **Custom clients** | `https://eurostat-mcp.onrender.com/mcp` | HTTP (POST) |
+
+**No authentication required.** CORS is enabled for all origins.
 
 ---
 
@@ -243,7 +260,28 @@ This project includes a `render.yaml` for one-click deployment:
 1. Push this repository to GitHub
 2. Connect your GitHub repo to [Render](https://render.com)
 3. Render will automatically detect `render.yaml` and deploy
-4. Your MCP endpoint will be available at `https://your-service.onrender.com/sse`
+4. Your MCP server will be available at:
+   - **HTTP transport (recommended)**: `https://your-service.onrender.com/mcp`
+   - **SSE transport (legacy)**: `https://your-service.onrender.com/sse`
+
+### Available Endpoints
+
+Once deployed, your server exposes:
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/mcp` | POST | **Primary transport** - JSON-RPC 2.0 requests (recommended for ChatGPT, Claude.ai) |
+| `/mcp` | GET | Server metadata and capabilities |
+| `/sse` | GET | Legacy SSE transport (persistent connection) |
+| `/messages` | POST | Legacy SSE message endpoint |
+| `/health` | GET | Health check |
+| `/` | GET | Server information |
+
+### Connecting from ChatGPT
+
+1. Go to ChatGPT Settings → Beta Features → Enable "Actions"
+2. Add a new MCP server with URL: `https://your-service.onrender.com/mcp`
+3. The server will auto-discover tools and capabilities
 
 ---
 

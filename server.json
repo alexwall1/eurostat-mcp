@@ -11,6 +11,14 @@
     "prompts": false
   },
   "transports": ["stdio", "sse"],
+  "remotes": [
+    {
+      "name": "streamable-http",
+      "type": "streamable-http",
+      "url": "https://eurostat-mcp.onrender.com/mcp",
+      "description": "Primary HTTP transport - recommended for most clients"
+    }
+  ],
   "tools": [
     {
       "name": "search_datasets",
