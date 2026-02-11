@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import express, { Request, Response } from "express";
 import { z } from "zod";
 import {
@@ -295,7 +295,7 @@ function createServer(): McpServer {
 }
 
 // ---------------------------------------------------------------------------
-// Transport: Streamable HTTP (for remote hosting) or stdio (for local use)
+// Transport: SSE (for remote hosting) or stdio (for local use)
 // ---------------------------------------------------------------------------
 
 async function main() {
@@ -309,8 +309,23 @@ async function main() {
     await server.connect(transport);
     console.error("Eurostat MCP server running on stdio");
   } else {
-    // Streamable HTTP mode for remote hosting (Render, etc.)
+    // HTTP + SSE mode for remote hosting (Render, etc.)
+    // This uses the legacy SSE transport (GET /sse + POST /messages)
+    // which is what Claude.ai connectors currently support.
     const app = express();
+
+    // CORS — allow all origins
+    app.use((_req: Request, res: Response, next: Function) => {
+      res.header("Access-Control-Allow-Origin", "*");
+      res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, DELETE");
+      res.header("Access-Control-Allow-Headers", "Content-Type, Accept, Authorization, Mcp-Session-Id");
+      if (_req.method === "OPTIONS") {
+        res.status(204).end();
+        return;
+      }
+      next();
+    });
+
     app.use(express.json());
 
     // Health check
@@ -323,35 +338,37 @@ async function main() {
       });
     });
 
-    // Create MCP server and stateless Streamable HTTP transport
-    const server = createServer();
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: undefined, // stateless — no session tracking
+    // Per-session SSE transports
+    const transports: { [sessionId: string]: SSEServerTransport } = {};
+
+    // SSE endpoint — client connects here to open the event stream
+    app.get("/sse", async (_req: Request, res: Response) => {
+      console.log("New SSE connection");
+      const server = createServer();
+      const transport = new SSEServerTransport("/messages", res);
+      transports[transport.sessionId] = transport;
+
+      res.on("close", () => {
+        console.log(`SSE connection closed: ${transport.sessionId}`);
+        delete transports[transport.sessionId];
+      });
+
+      await server.connect(transport);
     });
 
-    await server.connect(transport);
-
-    // MCP endpoint — POST handles JSON-RPC requests
-    app.post("/mcp", async (req: Request, res: Response) => {
-      try {
-        await transport.handleRequest(req, res, req.body);
-      } catch (error) {
-        console.error("Error handling MCP request:", error);
-        if (!res.headersSent) {
-          res.status(500).json({
-            jsonrpc: "2.0",
-            error: {
-              code: -32603,
-              message: "Internal server error",
-            },
-            id: null,
-          });
-        }
+    // Messages endpoint — client POSTs JSON-RPC messages here
+    app.post("/messages", async (req: Request, res: Response) => {
+      const sessionId = req.query.sessionId as string;
+      const transport = transports[sessionId];
+      if (!transport) {
+        res.status(400).json({ error: "Invalid or expired session. Connect via /sse first." });
+        return;
       }
+      await transport.handlePostMessage(req, res, req.body);
     });
 
-    // MCP endpoint — GET returns server metadata for discovery
-    app.get("/mcp", async (_req: Request, res: Response) => {
+    // MCP metadata endpoint — matches the SCB-MCP pattern for discovery
+    app.get("/mcp", (_req: Request, res: Response) => {
       res.json({
         protocol: "mcp",
         version: "1.0.0",
@@ -387,20 +404,6 @@ async function main() {
       });
     });
 
-    // MCP endpoint — DELETE returns 405 (no sessions in stateless mode)
-    app.delete("/mcp", async (_req: Request, res: Response) => {
-      res.writeHead(405).end(
-        JSON.stringify({
-          jsonrpc: "2.0",
-          error: {
-            code: -32000,
-            message: "Method not allowed.",
-          },
-          id: null,
-        })
-      );
-    });
-
     // Root page
     app.get("/", (_req: Request, res: Response) => {
       res.json({
@@ -408,24 +411,23 @@ async function main() {
         version: "1.0.0",
         description:
           "MCP server providing access to Eurostat's European statistical database.",
-        mcp_endpoint: "/mcp",
-        health: "/health",
+        endpoints: {
+          sse: "/sse",
+          messages: "/messages",
+          mcp: "/mcp",
+          health: "/health",
+        },
         documentation:
           "https://ec.europa.eu/eurostat/web/user-guides/data-browser/api-data-access",
-        tools: [
-          "search_datasets — Search for Eurostat datasets by keyword",
-          "get_dataset_structure — Get dimensions and codes for a dataset",
-          "get_dataset_data — Fetch statistical data with filters",
-          "preview_data — Quick preview of a dataset's latest data",
-          "find_geo_code — Resolve country/region names to GEO codes",
-        ],
       });
     });
 
     app.listen(port, () => {
       console.log(`Eurostat MCP server listening on port ${port}`);
-      console.log(`  Health:   http://localhost:${port}/health`);
-      console.log(`  MCP:      http://localhost:${port}/mcp`);
+      console.log(`  Health:     http://localhost:${port}/health`);
+      console.log(`  SSE:        http://localhost:${port}/sse`);
+      console.log(`  Messages:   http://localhost:${port}/messages`);
+      console.log(`  MCP info:   http://localhost:${port}/mcp`);
     });
   }
 }
