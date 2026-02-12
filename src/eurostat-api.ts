@@ -337,7 +337,7 @@ export async function getDatasetData(
     values.push(rawValues[String(i)] !== undefined ? rawValues[String(i)] : null);
   }
 
-  // Format data as readable table (limited to first ~50 data points)
+  // Format data as readable table (no truncation)
   const formatted = formatJsonStatData(dimensions, dimSizes, values);
 
   return {
@@ -363,16 +363,14 @@ function formatJsonStatData(
   }
 
   const lines: string[] = [];
-  const maxRows = 100;
-  let rowCount = 0;
 
   // Build header from dimension labels
   const header = dimensions.map((d) => d.label).join(" | ") + " | Value";
   lines.push(header);
   lines.push("-".repeat(header.length));
 
-  // Iterate through all value positions
-  for (let i = 0; i < values.length && rowCount < maxRows; i++) {
+  // Iterate through all value positions (no truncation)
+  for (let i = 0; i < values.length; i++) {
     if (values[i] === null) continue;
 
     // Calculate indices for each dimension
@@ -389,11 +387,6 @@ function formatJsonStatData(
     });
 
     lines.push(`${labels.join(" | ")} | ${values[i]}`);
-    rowCount++;
-  }
-
-  if (rowCount >= maxRows) {
-    lines.push(`\n... (showing first ${maxRows} non-null values of ${values.filter((v) => v !== null).length} total)`);
   }
 
   return lines.join("\n");
