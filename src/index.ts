@@ -8,6 +8,7 @@ import {
   searchDatasets,
   getDatasetStructure,
   getDatasetData,
+  buildCsvUrl,
   previewData,
   resolveGeoCode,
 } from "./eurostat-api.js";
@@ -143,7 +144,7 @@ function createServer(): McpServer {
   // ── Tool: get_dataset_data ───────────────────────────────────────────────
   server.tool(
     "get_dataset_data",
-    "Fetch statistical data from a Eurostat dataset with optional dimension filters. Returns data in a human-readable table format. Always use filters to limit data size — unfiltered requests on large datasets will fail or be very slow.",
+    "Fetch statistical data from a Eurostat dataset with optional dimension filters. Returns data in a human-readable table format if 10 or fewer data points, otherwise returns a direct Eurostat CSV download URL. Always use filters to limit data size — unfiltered requests on large datasets will fail or be very slow.",
     {
       datasetCode: z
         .string()
@@ -166,14 +167,26 @@ function createServer(): McpServer {
       try {
         const result = await getDatasetData(datasetCode, filters, lang);
 
+        const nonNullCount = result.values.filter((v) => v !== null).length;
+
+        if (nonNullCount > 10) {
+          const csvUrl = buildCsvUrl(datasetCode, filters, lang);
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `## ${result.title}\n\nSource: ${result.source} | Last updated: ${result.updated}\n\nThe query returned **${nonNullCount} data points**, which is too many to display inline.\n\n**Download as CSV:**\n${csvUrl}\n\nTo get fewer results, narrow your filters (e.g., specific geo, time period, or use \`lastTimePeriod=1\`).`,
+              },
+            ],
+          };
+        }
+
         const dimSummary = result.dimensions
           .map(
             (d) =>
               `${d.label}: ${d.categories.map((c) => c.label).join(", ")}`
           )
           .join("\n");
-
-        const nonNullCount = result.values.filter((v) => v !== null).length;
 
         return {
           content: [

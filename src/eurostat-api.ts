@@ -392,6 +392,31 @@ function formatJsonStatData(
   return lines.join("\n");
 }
 
+/**
+ * Build a direct Eurostat CSV download URL for a given dataset and filters.
+ */
+export function buildCsvUrl(
+  datasetCode: string,
+  filters: Record<string, string | string[]> = {},
+  lang: string = "EN"
+): string {
+  const params = new URLSearchParams();
+  params.set("format", "SDMX-CSV");
+  params.set("lang", lang.toUpperCase());
+
+  for (const [key, value] of Object.entries(filters)) {
+    if (Array.isArray(value)) {
+      for (const v of value) {
+        params.append(key, v);
+      }
+    } else {
+      params.append(key, value);
+    }
+  }
+
+  return `${STATISTICS_URL}/${datasetCode.toUpperCase()}?${params.toString()}`;
+}
+
 // ---------------------------------------------------------------------------
 // Preview Data (limited fetch)
 // ---------------------------------------------------------------------------
