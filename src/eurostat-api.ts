@@ -430,16 +430,12 @@ export function buildTsvUrl(
 
   // Build SDMX 2.1 key: dot-separated dimension values in order.
   // Multiple values for a dimension are joined with '+'. Empty = wildcard.
-  // TIME_PERIOD is excluded — time filtering is handled via query parameters.
   let key = "";
   if (dimensionIds.length > 0) {
-    const timeDimIds = new Set(["time", "time_period", "timeperiod"]);
-    const keyParts = dimensionIds
-      .filter((dimId) => !timeDimIds.has(dimId.toLowerCase()))
-      .map((dimId) => {
-        const values = dimensionFilters[dimId.toLowerCase()];
-        return values ? values.join("+") : "";
-      });
+    const keyParts = dimensionIds.map((dimId) => {
+      const values = dimensionFilters[dimId.toLowerCase()];
+      return values ? values.join("+") : "";
+    });
     key = keyParts.join(".");
   }
 
