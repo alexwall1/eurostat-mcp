@@ -189,7 +189,7 @@ export async function getDatasetStructure(
   // Parse codelists
   const codelistMap: Map<string, { id: string; name: string }[]> = new Map();
   const clRegex =
-    /<s:Codelist id="([^"]+)"[^>]*>([\s\S]*?)<\/s:Codelist>/g;
+    /<s:Codelist [^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/s:Codelist>/g;
   let clMatch;
 
   while ((clMatch = clRegex.exec(xml)) !== null) {
