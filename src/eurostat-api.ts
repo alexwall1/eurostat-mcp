@@ -397,8 +397,8 @@ function formatJsonStatData(
 // ---------------------------------------------------------------------------
 
 /**
- * Build a direct download URL for a Eurostat dataset in TSV format.
- * The returned URL can be opened directly in Excel via Data → From Web.
+ * Build a direct download URL for a Eurostat dataset in JSON-stat format.
+ * The returned URL can be used to download data or opened in Excel via Data → From Web.
  */
 export function getDatasetUrl(
   datasetCode: string,
@@ -406,7 +406,7 @@ export function getDatasetUrl(
   lang: string = "EN"
 ): string {
   const params = new URLSearchParams();
-  params.set("format", "TSV");
+  params.set("format", "JSON");
   params.set("lang", lang.toUpperCase());
 
   for (const [key, value] of Object.entries(filters)) {

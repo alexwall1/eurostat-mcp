@@ -296,7 +296,7 @@ function createServer(): McpServer {
   // ── Tool: get_dataset_url ────────────────────────────────────────────────
   server.tool(
     "get_dataset_url",
-    "Generate a direct download URL for a Eurostat dataset in TSV format (tab-separated values). The URL can be opened directly in Excel via Data → From Web, or downloaded as a file. Accepts the same dataset code and filters as get_dataset_data.",
+    "Generate a direct download URL for a Eurostat dataset in JSON-stat format. The URL can be opened directly in Excel via Data → From Web, or downloaded as a file. Accepts the same dataset code and filters as get_dataset_data.",
     {
       datasetCode: z
         .string()
@@ -322,7 +322,7 @@ function createServer(): McpServer {
           content: [
             {
               type: "text" as const,
-              text: `## Download URL for ${datasetCode.toUpperCase()} (TSV)\n\n${url}\n\n💡 **How to open in Excel**: Go to **Data → Get Data → From Web**, paste the URL above, and click OK. Excel will import the tab-separated data directly.`,
+              text: `## Download URL for ${datasetCode.toUpperCase()} (JSON-stat)\n\n${url}\n\n💡 **How to open in Excel**: Go to **Data → Get Data → From Web**, paste the URL above, and click OK.`,
             },
           ],
         };
