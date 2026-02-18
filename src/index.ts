@@ -8,6 +8,7 @@ import {
   searchDatasets,
   getDatasetStructure,
   getDatasetData,
+  getDatasetUrl,
   previewData,
   resolveGeoCode,
 } from "./eurostat-api.js";
@@ -292,6 +293,53 @@ function createServer(): McpServer {
     }
   );
 
+  // ── Tool: get_dataset_url ────────────────────────────────────────────────
+  server.tool(
+    "get_dataset_url",
+    "Generate a direct download URL for a Eurostat dataset in TSV format (tab-separated values). The URL can be opened directly in Excel via Data → From Web, or downloaded as a file. Accepts the same dataset code and filters as get_dataset_data.",
+    {
+      datasetCode: z
+        .string()
+        .min(2)
+        .describe(
+          "Eurostat dataset code (e.g., 'NAMA_10_GDP'). Use search_datasets to find codes."
+        ),
+      filters: z
+        .record(z.string(), z.union([z.string(), z.array(z.string())]))
+        .default({})
+        .describe(
+          "Dimension filters as key-value pairs. Keys are dimension codes (e.g., 'geo', 'unit', 'na_item', 'time'). Values can be a single code or an array. Special time filters: 'sinceTimePeriod', 'untilTimePeriod', 'lastTimePeriod'. Geographic: 'geoLevel' = aggregate|country|nuts1|nuts2|nuts3. Example: { \"geo\": \"DE\", \"unit\": \"CP_MEUR\", \"sinceTimePeriod\": \"2018\" }"
+        ),
+      lang: z
+        .enum(["EN", "FR", "DE"])
+        .default("EN")
+        .describe("Language for labels: 'EN' (default), 'FR', or 'DE'"),
+    },
+    async ({ datasetCode, filters, lang }) => {
+      try {
+        const url = getDatasetUrl(datasetCode, filters, lang);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `## Download URL for ${datasetCode.toUpperCase()} (TSV)\n\n${url}\n\n💡 **How to open in Excel**: Go to **Data → Get Data → From Web**, paste the URL above, and click OK. Excel will import the tab-separated data directly.`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error generating dataset URL: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
   return server;
 }
 
@@ -466,7 +514,7 @@ async function main() {
           resources: false,
           prompts: false,
         },
-        tools: 5,
+        tools: 6,
         resources: 0,
         prompts: 0,
         compatibility: {

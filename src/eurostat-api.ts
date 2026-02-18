@@ -393,6 +393,36 @@ function formatJsonStatData(
 }
 
 // ---------------------------------------------------------------------------
+// Dataset URL (Excel-compatible TSV download link)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a direct download URL for a Eurostat dataset in TSV format.
+ * The returned URL can be opened directly in Excel via Data → From Web.
+ */
+export function getDatasetUrl(
+  datasetCode: string,
+  filters: Record<string, string | string[]> = {},
+  lang: string = "EN"
+): string {
+  const params = new URLSearchParams();
+  params.set("format", "TSV");
+  params.set("lang", lang.toUpperCase());
+
+  for (const [key, value] of Object.entries(filters)) {
+    if (Array.isArray(value)) {
+      for (const v of value) {
+        params.append(key, v);
+      }
+    } else {
+      params.append(key, value);
+    }
+  }
+
+  return `${STATISTICS_URL}/${datasetCode.toUpperCase()}?${params.toString()}`;
+}
+
+// ---------------------------------------------------------------------------
 // Preview Data (limited fetch)
 // ---------------------------------------------------------------------------
 
