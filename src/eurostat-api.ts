@@ -393,53 +393,28 @@ function formatJsonStatData(
 }
 
 /**
- * Build a direct Eurostat TSV download URL using the SDMX 2.1 API.
- *
- * The Statistics API 1.0 only supports JSON, so we use the SDMX 2.1
- * endpoint which supports TSV format. Dimension filters are encoded
- * into the key path (dot-separated, in dimension order) and time-based
- * filters become query parameters.
+ * Build a direct Eurostat CSV download URL for a given dataset and filters.
  */
-export function buildTsvUrl(
+export function buildCsvUrl(
   datasetCode: string,
   filters: Record<string, string | string[]> = {},
-  dimensionIds: string[] = []
+  lang: string = "EN"
 ): string {
   const params = new URLSearchParams();
-  params.set("format", "TSV");
-
-  // Map Statistics API filter names to SDMX 2.1 query parameters
-  const timeParamMap: Record<string, string> = {
-    sinceTimePeriod: "startPeriod",
-    untilTimePeriod: "endPeriod",
-    lastTimePeriod: "lastNObservations",
-  };
-
-  // Separate dimension filters from special/time filters
-  const specialKeys = new Set([...Object.keys(timeParamMap), "geoLevel", "lang"]);
-  const dimensionFilters: Record<string, string[]> = {};
+  params.set("format", "SDMX-CSV");
+  params.set("lang", lang.toUpperCase());
 
   for (const [key, value] of Object.entries(filters)) {
-    const lowerKey = key.toLowerCase();
-    if (timeParamMap[key]) {
-      params.set(timeParamMap[key], Array.isArray(value) ? value[0] : value);
-    } else if (!specialKeys.has(key) && !specialKeys.has(lowerKey)) {
-      dimensionFilters[key.toLowerCase()] = Array.isArray(value) ? value : [value];
+    if (Array.isArray(value)) {
+      for (const v of value) {
+        params.append(key, v);
+      }
+    } else {
+      params.append(key, value);
     }
   }
 
-  // Build SDMX 2.1 key: dot-separated dimension values in order.
-  // Multiple values for a dimension are joined with '+'. Empty = wildcard.
-  let key = "";
-  if (dimensionIds.length > 0) {
-    const keyParts = dimensionIds.map((dimId) => {
-      const values = dimensionFilters[dimId.toLowerCase()];
-      return values ? values.join("+") : "";
-    });
-    key = keyParts.join(".");
-  }
-
-  return `${SDMX_URL}/data/${datasetCode.toUpperCase()}/${key}?${params.toString()}`;
+  return `${STATISTICS_URL}/${datasetCode.toUpperCase()}?${params.toString()}`;
 }
 
 // ---------------------------------------------------------------------------
