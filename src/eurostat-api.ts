@@ -427,7 +427,6 @@ export async function getDatasetUrl(
   // Map Statistics-API time params to SDMX equivalents
   const params = new URLSearchParams();
   params.set("format", "TSV");
-  params.set("lang", lang.toUpperCase());
   const startPeriod = filters["sinceTimePeriod"];
   const endPeriod = filters["untilTimePeriod"];
   if (startPeriod) params.set("startPeriod", Array.isArray(startPeriod) ? startPeriod[0] : startPeriod);
