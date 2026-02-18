@@ -393,33 +393,47 @@ function formatJsonStatData(
 }
 
 // ---------------------------------------------------------------------------
-// Dataset URL (Excel-compatible TSV download link)
+// Dataset URL (SDMX 2.1 TSV download link)
 // ---------------------------------------------------------------------------
 
 /**
- * Build a direct download URL for a Eurostat dataset in JSON-stat format.
- * The returned URL can be used to download data or opened in Excel via Data → From Web.
+ * Build a direct download URL for a Eurostat dataset in TSV format via the SDMX 2.1 API.
+ * Fetches the dataset structure to determine dimension order, then builds the SDMX key path.
+ * The returned URL can be opened directly in Excel via Data → Get Data → From Web.
  */
-export function getDatasetUrl(
+export async function getDatasetUrl(
   datasetCode: string,
   filters: Record<string, string | string[]> = {},
   lang: string = "EN"
-): string {
+): Promise<string> {
+  // These are time-range and meta filters — not dimension codes
+  const NON_DIM_KEYS = new Set([
+    "sinceTimePeriod", "untilTimePeriod", "lastTimePeriod", "geoLevel",
+  ]);
+
+  // Fetch dataset structure to get the ordered list of dimensions
+  const structure = await getDatasetStructure(datasetCode, lang.toLowerCase());
+  const dims = structure.dimensions.filter((d) => d.id !== "TIME_PERIOD");
+
+  // Build the SDMX key: one segment per dimension, joined by "."
+  // Multiple values for a dimension are joined by "+"; empty string = wildcard
+  const keyParts = dims.map((dim) => {
+    const filterValue = filters[dim.id.toLowerCase()] ?? filters[dim.id];
+    if (!filterValue) return "";
+    return Array.isArray(filterValue) ? filterValue.join("+") : filterValue;
+  });
+  const key = keyParts.join(".");
+
+  // Map Statistics-API time params to SDMX equivalents
   const params = new URLSearchParams();
-  params.set("format", "JSON");
+  params.set("format", "TSV");
   params.set("lang", lang.toUpperCase());
+  const startPeriod = filters["sinceTimePeriod"];
+  const endPeriod = filters["untilTimePeriod"];
+  if (startPeriod) params.set("startPeriod", Array.isArray(startPeriod) ? startPeriod[0] : startPeriod);
+  if (endPeriod) params.set("endPeriod", Array.isArray(endPeriod) ? endPeriod[0] : endPeriod);
 
-  for (const [key, value] of Object.entries(filters)) {
-    if (Array.isArray(value)) {
-      for (const v of value) {
-        params.append(key, v);
-      }
-    } else {
-      params.append(key, value);
-    }
-  }
-
-  return `${STATISTICS_URL}/${datasetCode.toUpperCase()}?${params.toString()}`;
+  return `${SDMX_URL}/data/ESTAT,${datasetCode.toUpperCase()},1.0/${key}?${params.toString()}`;
 }
 
 // ---------------------------------------------------------------------------

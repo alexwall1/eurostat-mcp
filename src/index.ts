@@ -296,7 +296,7 @@ function createServer(): McpServer {
   // ── Tool: get_dataset_url ────────────────────────────────────────────────
   server.tool(
     "get_dataset_url",
-    "Generate a direct download URL for a Eurostat dataset in JSON-stat format. The URL can be opened directly in Excel via Data → From Web, or downloaded as a file. Accepts the same dataset code and filters as get_dataset_data.",
+    "Generate a direct download URL for a Eurostat dataset in TSV format via the SDMX 2.1 API. The URL can be opened directly in Excel via Data → Get Data → From Web, or downloaded as a file. Accepts the same dataset code and filters as get_dataset_data.",
     {
       datasetCode: z
         .string()
@@ -317,12 +317,12 @@ function createServer(): McpServer {
     },
     async ({ datasetCode, filters, lang }) => {
       try {
-        const url = getDatasetUrl(datasetCode, filters, lang);
+        const url = await getDatasetUrl(datasetCode, filters, lang);
         return {
           content: [
             {
               type: "text" as const,
-              text: `## Download URL for ${datasetCode.toUpperCase()} (JSON-stat)\n\n${url}\n\n💡 **How to open in Excel**: Go to **Data → Get Data → From Web**, paste the URL above, and click OK.`,
+              text: `## Download URL for ${datasetCode.toUpperCase()} (TSV)\n\n${url}\n\n💡 **How to open in Excel**: Go to **Data → Get Data → From Web**, paste the URL above, and click OK.`,
             },
           ],
         };
