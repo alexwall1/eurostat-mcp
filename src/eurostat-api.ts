@@ -433,7 +433,7 @@ export async function getDatasetUrl(
   if (startPeriod) params.set("startPeriod", Array.isArray(startPeriod) ? startPeriod[0] : startPeriod);
   if (endPeriod) params.set("endPeriod", Array.isArray(endPeriod) ? endPeriod[0] : endPeriod);
 
-  return `${SDMX_URL}/data/ESTAT,${datasetCode.toUpperCase()},1.0/${key}?${params.toString()}`;
+  return `${SDMX_URL}/data/${datasetCode.toUpperCase()}/${key}?${params.toString()}`;
 }
 
 // ---------------------------------------------------------------------------
